@@ -24,36 +24,39 @@ export async function GET(request) {
   const cleanSymbol = symbol.trim().toUpperCase();
 
   try {
-    // 1. Fetch core quote
-    const quote = await yahooFinance.quote(cleanSymbol);
-    if (!quote || (!quote.regularMarketPrice && !quote.bid)) {
-      throw new Error(`Invalid stock quote returned for symbol: ${cleanSymbol}`);
-    }
-
-    // 2. Fetch historical prices (last 90 days to compute standard 50-day SMA, RSI, MACD, etc.)
     const endDate = new Date();
     const startDate = new Date();
     startDate.setDate(endDate.getDate() - 90);
 
-    const historical = await yahooFinance.historical(cleanSymbol, {
-      period1: startDate,
-      period2: endDate,
-      interval: '1d'
-    });
+    // Fetch quote, historical prices, and news concurrently in parallel
+    const [quoteResult, historicalResult, searchResult] = await Promise.allSettled([
+      yahooFinance.quote(cleanSymbol),
+      yahooFinance.historical(cleanSymbol, {
+        period1: startDate,
+        period2: endDate,
+        interval: '1d'
+      }),
+      yahooFinance.search(cleanSymbol)
+    ]);
 
+    if (quoteResult.status === 'rejected') {
+      throw new Error(`Invalid stock quote returned for symbol: ${cleanSymbol} (${quoteResult.reason.message})`);
+    }
+    if (historicalResult.status === 'rejected') {
+      throw new Error(`No historical daily price data found for symbol: ${cleanSymbol} (${historicalResult.reason.message})`);
+    }
+
+    const quote = quoteResult.value;
+    const historical = historicalResult.value;
+
+    if (!quote || (!quote.regularMarketPrice && !quote.bid)) {
+      throw new Error(`Invalid stock quote data structure returned for symbol: ${cleanSymbol}`);
+    }
     if (!historical || historical.length === 0) {
-      throw new Error(`No historical daily price data found for symbol: ${cleanSymbol}`);
+      throw new Error(`Empty historical daily price array returned for symbol: ${cleanSymbol}`);
     }
 
-    // 3. Fetch recent news and related stories
-    let news = [];
-    try {
-      const searchResponse = await yahooFinance.search(cleanSymbol);
-      news = searchResponse.news || [];
-    } catch (newsErr) {
-      console.warn(`[News fetch failed for ${cleanSymbol}]:`, newsErr.message);
-      // Fail silently for news, we can still perform technical calculations
-    }
+    const news = searchResult.status === 'fulfilled' ? (searchResult.value.news || []) : [];
 
     // Run stock scoring analysis engine
     const analysis = analyzeStock(quote, historical, news);
