@@ -716,6 +716,15 @@ export default function Home() {
             onChange={handleSearchChange}
             onFocus={() => setShowDropdown(true)}
             onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && searchQuery.trim().length > 0) {
+                if (searchResults.length > 0) {
+                  selectStock(searchResults[0].symbol);
+                } else {
+                  selectStock(searchQuery.trim().toUpperCase());
+                }
+              }
+            }}
           />
 
           {showDropdown && searchResults.length > 0 && (
@@ -1048,6 +1057,119 @@ export default function Home() {
               High-volatility momentum scans targeting short-term breakout entries, scalp targets, and strict stop loss exits.
             </p>
           </div>
+
+          {/* Active Search Ticker Scalp Profile */}
+          {stockData && (
+            <div className="glass-panel" style={{ border: '1px solid rgba(59, 130, 246, 0.4)', background: 'rgba(59, 130, 246, 0.03)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '0.75rem' }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span className="market-flag" style={{ fontSize: '1.1rem' }}>🎯</span>
+                    <h3 style={{ fontSize: '1.1rem', fontWeight: '800', color: '#fff', margin: 0 }}>
+                      Active Searched Scalp Profile
+                    </h3>
+                  </div>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginTop: '0.2rem' }}>
+                    Intraday scalp calculations loaded for ticker queried in the main search bar
+                  </p>
+                </div>
+                <button 
+                  className="quick-tag active"
+                  style={{ fontSize: '0.75rem', padding: '0.3rem 0.75rem' }}
+                  onClick={() => {
+                    setActiveTab('analyzer');
+                  }}
+                >
+                  View Full Metrics & Charts
+                </button>
+              </div>
+
+              {(() => {
+                const currentPrice = stockData.currentPrice || 0;
+                const intraday = stockData.horizons?.intraday;
+                const rsi = stockData.indicators?.rsi || 50;
+                const vol = stockData.indicators?.volatilityPct || 0;
+
+                // Calculate Risk/Reward ratio
+                const targetDiff = Math.abs((intraday?.target || currentPrice * 1.02) - currentPrice);
+                const stopDiff = Math.abs(currentPrice - (intraday?.stopLoss || currentPrice * 0.98));
+                const rrRatio = stopDiff === 0 ? 2.0 : (targetDiff / stopDiff);
+
+                const setupStyle = intraday?.action.includes('BUY') ? 'buy-mode' : intraday?.action.includes('SELL') ? 'sell-mode' : 'hold-mode';
+                const setupGlow = intraday?.action.includes('BUY') ? 'rgba(16, 185, 129, 0.08)' : intraday?.action.includes('SELL') ? 'rgba(244, 63, 94, 0.08)' : 'rgba(245, 158, 11, 0.04)';
+                const borderGlow = intraday?.action.includes('BUY') ? 'var(--color-buy)' : intraday?.action.includes('SELL') ? 'var(--color-sell)' : 'var(--color-hold)';
+
+                return (
+                  <div 
+                    className={`glass-panel horizon-card ${setupStyle}`} 
+                    style={{ 
+                      display: 'flex', 
+                      flexDirection: 'column', 
+                      gap: '1rem', 
+                      background: setupGlow,
+                      border: `1px solid ${borderGlow}`,
+                      borderLeft: `4px solid ${borderGlow}`
+                    }}
+                  >
+                    <div className="horizon-header" style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '0.75rem' }}>
+                      <div>
+                        <span className="pro-advisory-sym" style={{ fontSize: '1.3rem', color: borderGlow, fontWeight: 'bold' }}>{stockData.symbol}</span>
+                        <span className="pro-advisory-company" style={{ fontSize: '0.85rem' }}>{stockData.companyName}</span>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <span className={`badge ${getActionBadgeClass(intraday?.action || 'HOLD')}`} style={{ fontSize: '0.8rem', padding: '0.3rem 0.6rem' }}>{intraday?.action || 'HOLD'}</span>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.25rem', fontFamily: 'var(--font-mono)' }}>Match Rate: {intraday?.score || 50}%</div>
+                      </div>
+                    </div>
+
+                    <div className="three-col-grid" style={{ background: 'rgba(0,0,0,0.25)', padding: '1rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.02)' }}>
+                      <div className="pro-metric-box">
+                        <span className="pro-metric-lbl">Scalp Entry Trigger</span>
+                        <span className="pro-metric-val" style={{ fontSize: '1rem', color: '#fff' }}>{stockData.currency === 'INR' ? '₹' : '$'}{currentPrice.toFixed(2)}</span>
+                      </div>
+                      <div className="pro-metric-box">
+                        <span className="pro-metric-lbl">Scalp Take-Profit Target</span>
+                        <span className="pro-metric-val up" style={{ fontSize: '1rem' }}>{stockData.currency === 'INR' ? '₹' : '$'}{(intraday?.target || currentPrice * 1.02).toFixed(2)}</span>
+                      </div>
+                      <div className="pro-metric-box">
+                        <span className="pro-metric-lbl">Stop Loss Support Guard</span>
+                        <span className="pro-metric-val down" style={{ fontSize: '1rem' }}>{stockData.currency === 'INR' ? '₹' : '$'}{(intraday?.stopLoss || currentPrice * 0.98).toFixed(2)}</span>
+                      </div>
+                    </div>
+
+                    <div className="three-col-grid" style={{ fontSize: '0.8rem', borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '0.75rem' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                        <span style={{ color: 'var(--text-secondary)' }}>Risk:Reward</span>
+                        <strong style={{ color: 'var(--color-info)', fontFamily: 'var(--font-mono)', fontSize: '0.9rem' }}>{rrRatio.toFixed(1)} : 1</strong>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                        <span style={{ color: 'var(--text-secondary)' }}>Volatility Index (ATR%)</span>
+                        <strong style={{ color: vol > 2.2 ? 'var(--color-buy)' : 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontSize: '0.9rem' }}>{vol.toFixed(2)}% ({vol > 2.2 ? 'High Vol' : 'Normal'})</strong>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                        <span style={{ color: 'var(--text-secondary)' }}>RSI Momentum</span>
+                        <strong style={{ color: rsi < 35 || rsi > 65 ? 'var(--color-hold)' : 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontSize: '0.9rem' }}>{rsi.toFixed(1)}</strong>
+                      </div>
+                    </div>
+
+                    <div className="pro-advisory-bullets">
+                      <div className="pro-advisory-bullet-item">
+                        <span className="pro-bullet-dot" style={{ color: borderGlow }}>▸</span>
+                        <span className="pro-bullet-text" style={{ fontSize: '0.8rem', lineHeight: '1.4' }}>
+                          {intraday?.action.includes('BUY') 
+                            ? `Entry trigger breakout above ${stockData.currency === 'INR' ? '₹' : '$'}${currentPrice.toFixed(2)} with targeted intraday scalp upside of ${stockData.currency === 'INR' ? '₹' : '$'}{(targetDiff).toFixed(2)}.`
+                            : intraday?.action.includes('SELL')
+                            ? `Short-scalp entry trigger zone below ${stockData.currency === 'INR' ? '₹' : '$'}${currentPrice.toFixed(2)} with defensive stop loss trailing close at ${stockData.currency === 'INR' ? '₹' : '$'}{(intraday?.stopLoss || currentPrice * 0.98).toFixed(2)}.`
+                            : `Consolidation phase. Range bound scalping triggers require breakout range verification.`
+                          }
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
 
           {dashboardLoading ? (
             <div style={{ textAlign: 'center', padding: '5rem', color: 'var(--text-secondary)' }}>
@@ -1414,6 +1536,73 @@ export default function Home() {
                   
                   <div className="horizon-panel">
                     
+                    {/* Horizon 0: TOMORROW'S PREDICTION */}
+                    {stockData.horizons.tomorrow && (() => {
+                      const horizon = stockData.horizons.tomorrow;
+                      const cardStyle = horizon.direction === 'BULLISH' ? 'buy-mode' : horizon.direction === 'BEARISH' ? 'sell-mode' : 'hold-mode';
+                      const glowColor = horizon.direction === 'BULLISH' ? 'var(--color-buy)' : horizon.direction === 'BEARISH' ? 'var(--color-sell)' : 'var(--color-hold)';
+                      return (
+                        <div className={`horizon-card ${cardStyle}`} style={{ border: `1px dashed ${glowColor}`, background: 'rgba(255,255,255,0.01)' }}>
+                          <div className="horizon-header">
+                            <div className="horizon-title-box">
+                              <span className="horizon-name" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#fff' }}>
+                                <span style={{ textShadow: `0 0 10px ${glowColor}` }}>🔮</span>
+                                Next-Day Predictive Forecast
+                              </span>
+                              <span className="horizon-period">Target Session: Tomorrow (Next Active Day)</span>
+                            </div>
+                            <div className="horizon-score-badge">
+                              <span className={`badge ${getActionBadgeClass(horizon.action)}`}>{horizon.action}</span>
+                              <span className="horizon-score-val" style={{ color: glowColor, fontWeight: 'bold' }}>{horizon.score}% Confidence</span>
+                            </div>
+                          </div>
+
+                          <div className="three-col-grid" style={{ margin: '1rem 0', background: 'rgba(0,0,0,0.3)', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.03)' }}>
+                            <div className="target-item">
+                              <span className="target-label" style={{ fontSize: '0.7rem' }}>Expected Day Range</span>
+                              <span className="target-val" style={{ fontSize: '0.85rem', color: '#fff', fontFamily: 'var(--font-mono)' }}>
+                                {stockData.currency === 'INR' ? '₹' : '$'}{horizon.expectedRange.low.toFixed(2)} - {stockData.currency === 'INR' ? '₹' : '$'}{horizon.expectedRange.high.toFixed(2)}
+                              </span>
+                            </div>
+                            <div className="target-item">
+                              <span className="target-label" style={{ fontSize: '0.7rem' }}>Standard Pivot Point</span>
+                              <span className="target-val" style={{ fontSize: '0.85rem', color: 'var(--color-info)', fontFamily: 'var(--font-mono)' }}>
+                                {stockData.currency === 'INR' ? '₹' : '$'}{horizon.pivot.toFixed(2)}
+                              </span>
+                            </div>
+                            <div className="target-item">
+                              <span className="target-label" style={{ fontSize: '0.7rem' }}>Next R1 / S1 Targets</span>
+                              <span className="target-val" style={{ fontSize: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.1rem', fontFamily: 'var(--font-mono)' }}>
+                                <span className="up">R1: {stockData.currency === 'INR' ? '₹' : '$'}{horizon.resistance.toFixed(2)}</span>
+                                <span className="down">S1: {stockData.currency === 'INR' ? '₹' : '$'}{horizon.support.toFixed(2)}</span>
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="two-col-grid" style={{ gap: '0.75rem', marginBottom: '1.25rem', borderBottom: '1px solid rgba(255,255,255,0.04)', paddingBottom: '0.75rem' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                              <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Bullish Breakout Catalyst (Buy Trigger)</span>
+                              <strong style={{ fontSize: '0.8rem', color: 'var(--color-buy)', fontFamily: 'var(--font-mono)' }}>
+                                Above {stockData.currency === 'INR' ? '₹' : '$'}{horizon.breakoutTrigger.toFixed(2)}
+                              </strong>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                              <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Bearish Breakdown Warning (Sell Trigger)</span>
+                              <strong style={{ fontSize: '0.8rem', color: 'var(--color-sell)', fontFamily: 'var(--font-mono)' }}>
+                                Below {stockData.currency === 'INR' ? '₹' : '$'}{horizon.breakdownTrigger.toFixed(2)}
+                              </strong>
+                            </div>
+                          </div>
+
+                          <div className="horizon-signals-list" style={{ borderTop: 'none', paddingTop: 0 }}>
+                            {horizon.signals.map((sig, idx) => (
+                              <span key={idx} className="horizon-signal-bullet" style={{ fontSize: '0.75rem' }}>{sig}</span>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
+
                     {/* Horizon 1: INTRADAY */}
                     {(() => {
                       const horizon = stockData.horizons.intraday;

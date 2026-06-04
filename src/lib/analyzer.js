@@ -346,6 +346,118 @@ export function analyzeStock(quote, historical, news = []) {
   const longTarget = currentPrice * 1.45; // 45% upside target over long run
   const longStopLoss = currentPrice * 0.80; // 20% max draw-down limit
 
+  // 4. TOMORROW PREDICTION (Next-Day AI Quantitative Forecast)
+  const lastBar = historical[historical.length - 1] || {};
+  const highToday = lastBar.high || currentPrice;
+  const lowToday = lastBar.low || currentPrice;
+  const closeToday = lastBar.close || currentPrice;
+  
+  // Pivot point calculations for support & resistance
+  const pivot = (highToday + lowToday + closeToday) / 3;
+  const r1 = (2 * pivot) - lowToday;
+  const s1 = (2 * pivot) - highToday;
+  const r2 = pivot + (highToday - lowToday);
+  const s2 = pivot - (highToday - lowToday);
+  
+  // Breakout and Breakdown triggers
+  const breakoutTrigger = highToday * 1.0025;
+  const breakdownTrigger = lowToday * 0.9975;
+  
+  // Historical context
+  const prevMacdObj = macdHistory.length > 1 ? macdHistory[macdHistory.length - 2] : macdObj;
+  const prevRsi = rsiHistory.length > 1 ? rsiHistory[rsiHistory.length - 2].value : rsi;
+  
+  // Tomorrow Trend Scoring
+  let tomorrowScore = 50;
+  const tomorrowSignals = [];
+  
+  // Rule 1: Moving average price alignment
+  if (currentPrice > ema9) {
+    tomorrowScore += 10;
+    tomorrowSignals.push("Short-term bias is bullish with the price holding above the 9 EMA.");
+  } else {
+    tomorrowScore -= 10;
+    tomorrowSignals.push("Price resides below the 9 EMA, indicating a minor short-term bearish drag.");
+  }
+  
+  // Rule 2: MACD Histogram expansion/contraction
+  if (macdObj.histogram > prevMacdObj.histogram) {
+    tomorrowScore += 10;
+    tomorrowSignals.push("MACD histogram is expanding positive, signaling upward momentum acceleration.");
+  } else {
+    tomorrowScore -= 10;
+    tomorrowSignals.push("MACD momentum is slowing down or contracting, indicating consolidation or selling pressure.");
+  }
+  
+  // Rule 3: RSI Slope
+  if (rsi > prevRsi) {
+    tomorrowScore += 8;
+    tomorrowSignals.push("RSI slope is rising, validating increasing buyer strength.");
+  } else {
+    tomorrowScore -= 8;
+    tomorrowSignals.push("RSI is sloping downward, reflecting minor momentum exhaustion.");
+  }
+  
+  // Rule 4: Close relative to day's range
+  const dayRange = highToday - lowToday;
+  if (dayRange > 0) {
+    const closePosition = (closeToday - lowToday) / dayRange;
+    if (closePosition > 0.7) {
+      tomorrowScore += 12;
+      tomorrowSignals.push("Stock closed near the high of the day, exhibiting strong session-end buying.");
+    } else if (closePosition < 0.3) {
+      tomorrowScore -= 12;
+      tomorrowSignals.push("Stock closed near the low of the day, showing active late-session distribution.");
+    } else {
+      tomorrowSignals.push("Stock closed in the middle of its daily range, reflecting neutral intraday balance.");
+    }
+  }
+  
+  // Rule 5: Sentiment
+  if (sentimentScore > 2) {
+    tomorrowScore += 10;
+    tomorrowSignals.push("Bullish market sentiment is expected to carry over to tomorrow's opening bell.");
+  } else if (sentimentScore < -2) {
+    tomorrowScore -= 10;
+    tomorrowSignals.push("Bearish news flows suggest defensive/cautious opening bids tomorrow.");
+  }
+  
+  tomorrowScore = Math.max(5, Math.min(95, tomorrowScore));
+  
+  let tomorrowDirection = "NEUTRAL";
+  let tomorrowAction = "RANGE CONSOLIDATION";
+  let tomorrowConfidence = 50;
+  
+  if (tomorrowScore >= 62) {
+    tomorrowDirection = "BULLISH";
+    tomorrowAction = "LONG BREAKOUT SETUP";
+    tomorrowConfidence = tomorrowScore;
+  } else if (tomorrowScore <= 38) {
+    tomorrowDirection = "BEARISH";
+    tomorrowAction = "SHORT BREAKDOWN SETUP";
+    tomorrowConfidence = 100 - tomorrowScore;
+  } else {
+    tomorrowDirection = "NEUTRAL";
+    tomorrowAction = "RANGE SCALP SETUP";
+    tomorrowConfidence = Math.round(Math.abs(50 - tomorrowScore) * 2 + 50);
+  }
+  
+  // Volatility projections for expected range
+  const rangeDelta = avgDailyRange * 0.9;
+  let tomorrowHigh = currentPrice;
+  let tomorrowLow = currentPrice;
+  
+  if (tomorrowDirection === "BULLISH") {
+    tomorrowHigh = currentPrice + rangeDelta * 1.15;
+    tomorrowLow = currentPrice - rangeDelta * 0.85;
+  } else if (tomorrowDirection === "BEARISH") {
+    tomorrowHigh = currentPrice + rangeDelta * 0.85;
+    tomorrowLow = currentPrice - rangeDelta * 1.15;
+  } else {
+    tomorrowHigh = currentPrice + rangeDelta;
+    tomorrowLow = currentPrice - rangeDelta;
+  }
+
   return {
     symbol: quote.symbol || 'STOCK',
     companyName: quote.longName || quote.shortName || 'Stock Profile',
@@ -378,6 +490,21 @@ export function analyzeStock(quote, historical, news = []) {
         target: Number(intradayTarget.toFixed(2)),
         stopLoss: Number(intradayStopLoss.toFixed(2)),
         signals: intradaySignals
+      },
+      tomorrow: {
+        score: tomorrowConfidence,
+        action: tomorrowAction,
+        direction: tomorrowDirection,
+        expectedRange: {
+          high: Number(tomorrowHigh.toFixed(2)),
+          low: Number(tomorrowLow.toFixed(2))
+        },
+        pivot: Number(pivot.toFixed(2)),
+        resistance: Number(r1.toFixed(2)),
+        support: Number(s1.toFixed(2)),
+        breakoutTrigger: Number(breakoutTrigger.toFixed(2)),
+        breakdownTrigger: Number(breakdownTrigger.toFixed(2)),
+        signals: tomorrowSignals
       },
       medium: {
         score: mediumScore,
