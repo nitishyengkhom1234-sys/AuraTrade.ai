@@ -771,6 +771,12 @@ export default function Home() {
           Market Dashboard
         </button>
         <button
+          className={`tab-btn ${activeTab === 'intraday_screener' ? 'active' : ''}`}
+          onClick={() => setActiveTab('intraday_screener')}
+        >
+          🚀 Intraday Scalps
+        </button>
+        <button
           className={`tab-btn ${activeTab === 'analyzer' ? 'active' : ''}`}
           onClick={() => setActiveTab('analyzer')}
         >
@@ -1026,6 +1032,141 @@ export default function Home() {
               </p>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* TAB: INTRADAY SCALP SCREENER */}
+      {activeTab === 'intraday_screener' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+          
+          <div className="glass-panel" style={{ border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#fff' }}>
+              <span className="market-flag">🚀</span>
+              Taurus High-Velocity Intraday Scalp Screener
+            </h2>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: '0.25rem' }}>
+              High-volatility momentum scans targeting short-term breakout entries, scalp targets, and strict stop loss exits.
+            </p>
+          </div>
+
+          {dashboardLoading ? (
+            <div style={{ textAlign: 'center', padding: '5rem', color: 'var(--text-secondary)' }}>
+              <h3>Scanning active stock segment for volatility spikes...</h3>
+            </div>
+          ) : (
+            <div className="two-col-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '1.5rem' }}>
+              {dashboardData
+                .map(stock => {
+                  if (!stock) return null;
+                  const currentPrice = stock.currentPrice || 0;
+                  const intraday = stock.horizons?.intraday;
+                  const rsi = stock.indicators?.rsi || 50;
+                  const vol = stock.indicators?.volatilityPct || 0;
+
+                  // Calculate Risk/Reward ratio
+                  const targetDiff = Math.abs((intraday?.target || currentPrice * 1.02) - currentPrice);
+                  const stopDiff = Math.abs(currentPrice - (intraday?.stopLoss || currentPrice * 0.98));
+                  const rrRatio = stopDiff === 0 ? 2.0 : (targetDiff / stopDiff);
+
+                  return {
+                    ...stock,
+                    score: intraday?.score || 50,
+                    action: intraday?.action || 'HOLD',
+                    target: intraday?.target || currentPrice * 1.02,
+                    stopLoss: intraday?.stopLoss || currentPrice * 0.98,
+                    rrRatio: rrRatio.toFixed(1),
+                    vol,
+                    rsi
+                  };
+                })
+                .filter(Boolean)
+                // Sort by scalp score descending
+                .sort((a, b) => b.score - a.score)
+                .map((stock) => {
+                  const setupStyle = stock.action.includes('BUY') ? 'buy-mode' : stock.action.includes('SELL') ? 'sell-mode' : 'hold-mode';
+                  const setupGlow = stock.action.includes('BUY') ? 'rgba(16, 185, 129, 0.08)' : stock.action.includes('SELL') ? 'rgba(244, 63, 94, 0.08)' : 'rgba(245, 158, 11, 0.04)';
+                  return (
+                    <div 
+                      key={stock.symbol} 
+                      className={`glass-panel horizon-card ${setupStyle}`} 
+                      style={{ 
+                        display: 'flex', 
+                        flexDirection: 'column', 
+                        gap: '1rem', 
+                        background: setupGlow,
+                        borderLeft: `4px solid ${stock.action.includes('BUY') ? 'var(--color-buy)' : stock.action.includes('SELL') ? 'var(--color-sell)' : 'var(--color-hold)'}`
+                      }}
+                    >
+                      <div className="horizon-header" style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '0.75rem' }}>
+                        <div>
+                          <span className="pro-advisory-sym" style={{ fontSize: '1.2rem', color: stock.action.includes('BUY') ? 'var(--color-buy)' : stock.action.includes('SELL') ? 'var(--color-sell)' : 'var(--color-hold)' }}>{stock.symbol}</span>
+                          <span className="pro-advisory-company" style={{ fontSize: '0.8rem' }}>{stock.companyName}</span>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <span className={`badge ${getActionBadgeClass(stock.action)}`} style={{ fontSize: '0.75rem' }}>{stock.action}</span>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.2rem', fontFamily: 'var(--font-mono)' }}>Match: {stock.score}%</div>
+                        </div>
+                      </div>
+
+                      <div className="three-col-grid" style={{ background: 'rgba(0,0,0,0.2)', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.02)' }}>
+                        <div className="pro-metric-box">
+                          <span className="pro-metric-lbl">Scalp Entry</span>
+                          <span className="pro-metric-val" style={{ fontSize: '0.9rem' }}>{stock.currency === 'INR' ? '₹' : '$'}{stock.currentPrice.toFixed(2)}</span>
+                        </div>
+                        <div className="pro-metric-box">
+                          <span className="pro-metric-lbl">Scalp Target</span>
+                          <span className="pro-metric-val up" style={{ fontSize: '0.9rem' }}>{stock.currency === 'INR' ? '₹' : '$'}{stock.target.toFixed(2)}</span>
+                        </div>
+                        <div className="pro-metric-box">
+                          <span className="pro-metric-lbl">Stop Loss guard</span>
+                          <span className="pro-metric-val down" style={{ fontSize: '0.9rem' }}>{stock.currency === 'INR' ? '₹' : '$'}{stock.stopLoss.toFixed(2)}</span>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '0.5rem' }}>
+                        <span style={{ color: 'var(--text-secondary)' }}>Risk:Reward Ratio</span>
+                        <strong style={{ color: 'var(--color-info)', fontFamily: 'var(--font-mono)' }}>{stock.rrRatio} : 1</strong>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '0.5rem' }}>
+                        <span style={{ color: 'var(--text-secondary)' }}>Volatility Index (ATR%)</span>
+                        <strong style={{ color: stock.vol > 2.2 ? 'var(--color-buy)' : 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{stock.vol.toFixed(2)}% ({stock.vol > 2.2 ? 'High Vol' : 'Normal Vol'})</strong>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', paddingBottom: '0.5rem' }}>
+                        <span style={{ color: 'var(--text-secondary)' }}>RSI Momentum</span>
+                        <strong style={{ color: stock.rsi < 35 || stock.rsi > 65 ? 'var(--color-hold)' : 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{stock.rsi.toFixed(1)}</strong>
+                      </div>
+
+                      <div className="pro-advisory-bullets" style={{ marginTop: '0.25rem' }}>
+                        <div className="pro-advisory-bullet-item">
+                          <span className="pro-bullet-dot" style={{ color: stock.action.includes('BUY') ? 'var(--color-buy)' : stock.action.includes('SELL') ? 'var(--color-sell)' : 'var(--color-hold)' }}>▸</span>
+                          <span className="pro-bullet-text" style={{ fontSize: '0.75rem', lineHeight: '1.4' }}>
+                            {stock.action.includes('BUY') 
+                              ? `Entry trigger breakout above ${stock.currency === 'INR' ? '₹' : '$'}${stock.currentPrice.toFixed(2)} with targeted intraday scalp upside of ${stock.currency === 'INR' ? '₹' : '$'}{(stock.target - stock.currentPrice).toFixed(2)}.`
+                              : stock.action.includes('SELL')
+                              ? `Short-scalp entry trigger zone below ${stock.currency === 'INR' ? '₹' : '$'}${stock.currentPrice.toFixed(2)} with defensive stop loss trailing close at ${stock.currency === 'INR' ? '₹' : '$'}{stock.stopLoss.toFixed(2)}.`
+                              : `Consolidation phase. Range range bound scalping triggers require breakout range verification.`
+                            }
+                          </span>
+                        </div>
+                      </div>
+
+                      <button 
+                        className="quick-tag" 
+                        style={{ marginTop: 'auto', width: '100%', alignSelf: 'stretch', padding: '0.5rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}
+                        onClick={() => {
+                          selectStock(stock.symbol);
+                          setActiveTab('analyzer');
+                        }}
+                      >
+                        Launch Interactive Chart & Indicators
+                      </button>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
         </div>
       )}
 
